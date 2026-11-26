@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f5f7">
+  <title>Professional Video Editor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+    <section id="projectsScreen" class="screen">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">VIDEO EDITOR</p>
+          <h1>プロジェクト</h1>
+        </div>
+        <button id="newProjectBtn" class="primary">＋ 新規作成</button>
+      </header>
+      <div class="toolbar">
+        <input id="projectSearch" type="search" placeholder="プロジェクトを検索">
+      </div>
+      <div id="projectList" class="project-list"></div>
+      <p class="footnote">プロジェクトはこのブラウザ内に保存されます。大切なデータは定期的にバックアップしてください。</p>
+    </section>
+
+    <section id="createScreen" class="screen hidden">
+      <header class="topbar">
+        <button class="back-btn" data-back="projects">‹ 戻る</button>
+        <h1>新規プロジェクト</h1>
+      </header>
+      <div class="setup-card">
+        <label for="projectName">プロジェクト名</label>
+        <input id="projectName" value="新しいプロジェクト" maxlength="60">
+        <h2>画面比率</h2>
+        <div class="ratio-grid">
+          <button class="ratio selected" data-ratio="16:9"><b>16:9</b><span>YouTube</span></button>
+          <button class="ratio" data-ratio="9:16"><b>9:16</b><span>Shorts / TikTok</span></button>
+          <button class="ratio" data-ratio="1:1"><b>1:1</b><span>正方形</span></button>
+          <button class="ratio" data-ratio="4:5"><b>4:5</b><span>Instagram縦長</span></button>
+          <button class="ratio" data-ratio="21:9"><b>21:9</b><span>シネマ</span></button>
+        </div>
+        <label for="resolution">解像度</label>
+        <select id="resolution">
+          <option value="720">HD (1280 × 720 相当)</option>
+          <option value="1080" selected>フルHD (1920 × 1080 相当)</option>
+          <option value="1440">2K (2560 × 1440 相当)</option>
+          <option value="2160">4K (3840 × 2160 相当)</option>
+        </select>
+        <button id="createProjectBtn" class="primary full">プロジェクトを作成</button>
+      </div>
+    </section>
+
+    <section id="editorScreen" class="screen hidden">
+      <header class="editor-header">
+        <button id="editorBack" class="back-btn">‹</button>
+        <div class="project-heading"><strong id="editorProjectName">プロジェクト</strong><small id="projectMeta">16:9 ・ 1080p</small></div>
+        <button id="saveBtn" class="primary compact">保存</button>
+      </header>
+
+      <div class="workspace">
+        <section class="preview-panel">
+          <div class="panel-heading"><span>プレビュー</span><button id="fitPreviewBtn" class="subtle-btn">画面に合わせる</button></div>
+          <div class="preview-stage">
+            <div id="previewCanvas" class="preview-canvas">
+              <span>プレビュー</span>
+            </div>
+          </div>
+          <div class="playback">
+            <button id="playBtn" aria-label="再生">▶</button>
+            <span id="currentTime">00:00:00</span>
+            <input id="seekBar" type="range" min="0" max="100" value="0">
+            <span id="totalTime">00:00:00</span>
+            <select id="previewSpeed" aria-label="再生速度">
+              <option>0.25</option><option>0.5</option><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option>
+            </select>
+          </div>
+        </section>
+
+        <section class="timeline-panel">
+          <div class="panel-heading">
+            <span>タイムライン</span>
+            <div class="timeline-actions">
+              <button id="addTrackBtn" class="subtle-btn">＋ トラック</button>
+              <button id="zoomOutBtn" class="subtle-btn">−</button>
+              <button id="zoomInBtn" class="subtle-btn">＋</button>
+            </div>
+          </div>
+          <div class="timeline-ruler"><span>00:00</span><span>00:05</span><span>00:10</span><span>00:15</span><span>00:20</span></div>
+          <div id="tracks" class="tracks">
+            <div class="empty-timeline">素材を追加すると、ここにクリップが表示されます。</div>
+          </div>
+        </section>
+      </div>
+
+      <nav class="bottom-tabs">
+        <button class="tab active" data-tab="media">▧<span>メディア</span></button>
+        <button class="tab" data-tab="edit">✎<span>編集</span></button>
+        <button class="tab" data-tab="text">T<span>テキスト</span></button>
+        <button class="tab" data-tab="audio">♫<span>オーディオ</span></button>
+        <button class="tab" data-tab="effects">✧<span>エフェクト</span></button>
+        <button class="tab" data-tab="layers">▤<span>レイヤー</span></button>
+        <button class="tab" data-tab="settings">⚙<span>設定</span></button>
+      </nav>
+
+      <section id="toolPanel" class="tool-panel">
+        <div class="tool-panel-head"><strong id="toolTitle">メディア</strong><button id="closeToolPanel" class="subtle-btn">閉じる</button></div>
+        <div id="toolContent" class="tool-content">
+          <p>動画・写真・音声を追加できます。</p>
+          <div class="media-buttons">
+            <button id="addVideoBtn">動画を追加</button>
+            <button id="addPhotoBtn">写真を追加</button>
+            <button id="addAudioBtn">音声を追加</button>
+          </div>
+          <div id="mediaItems" class="media-items"></div>
+        </div>
+      </section>
+      <input id="videoInput" type="file" accept="video/*" multiple hidden>
+      <input id="photoInput" type="file" accept="image/*" multiple hidden>
+      <input id="audioInput" type="file" accept="audio/*" multiple hidden>
+    </section>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
