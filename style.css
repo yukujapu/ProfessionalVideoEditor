@@ -100,3 +100,13 @@ h1 { font-size: 25px; margin: 2px 0; }
     padding: 10px !important;
   }
 }
+
+/* タイムライン：時間軸と複数トラック */
+#tracks.timeline-lanes { position:relative; overflow:auto; min-height:110px; padding-top:8px; touch-action:pan-x pan-y; }
+#tracks .track { min-width:calc(66px + var(--timeline-width)); width:calc(66px + var(--timeline-width)); gap:0; padding:0; min-height:52px; }
+#tracks .track-name { width:66px; min-width:66px; padding:8px 4px; align-self:stretch; display:flex; align-items:center; background:#f7f8fa; }
+#tracks .track-lane { position:relative; flex:0 0 auto; height:52px; border-bottom:1px solid #e8eaf0; background:repeating-linear-gradient(to right, transparent 0, transparent calc(var(--timeline-scale, 42px) - 1px), #f0f1f4 var(--timeline-scale, 42px)); }
+#tracks .clip { position:absolute; top:7px; height:38px; min-width:54px; max-width:none; padding:5px 8px; touch-action:none; user-select:none; -webkit-user-select:none; overflow:hidden; text-align:left; }
+#tracks .clip.selected { outline:2px solid #435ee8; z-index:2; }
+#tracks .timeline-playhead { position:absolute; top:0; bottom:0; width:2px; background:#ef4444; z-index:4; pointer-events:none; }
+#tracks .timeline-playhead::before { content:""; position:absolute; top:0; left:-5px; border-left:6px solid transparent; border-right:6px solid transparent; border-top:9px solid #ef4444; }
