@@ -1,309 +1,52 @@
-// メディア読み込み・タイムライン配置の初期機能
+// Professional Video Editor - タイムライン同期・クリップ移動
 const $ = id => document.getElementById(id);
 const screens = ["projectsScreen", "createScreen", "editorScreen"];
 let projects = [], currentProject = null, selectedRatio = "16:9";
 let media = [], clips = [], trackCount = 1, selectedClipId = null;
-
-function id() {
-  return crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now() + Math.random();
-}
-function showScreen(name) {
-  screens.forEach(x => $(x).classList.toggle("hidden", x !== name));
-}
-function saveProjects() {
-  try {
-    localStorage.setItem("pve_projects", JSON.stringify(projects));
-    renderProjects();
-  } catch {
-    alert("保存できませんでした。");
-  }
-}
-function loadProjects() {
-  try { projects = JSON.parse(localStorage.getItem("pve_projects") || "[]"); }
-  catch { projects = []; }
-  renderProjects();
-}
-function renderProjects() {
-  const list = $("projectList");
-  if (!list) return;
-  list.innerHTML = "";
-  const q = ($("projectSearch").value || "").toLowerCase();
-  const found = projects.filter(p => p.name.toLowerCase().includes(q));
-  if (!found.length) {
-    list.innerHTML = '<div class="empty-timeline">プロジェクトはまだありません。「新規作成」から始めましょう。</div>';
-    return;
-  }
-  found.forEach(p => {
-    const card = document.createElement("article");
-    card.className = "project-card";
-    const thumb = document.createElement("div");
-    thumb.className = "project-thumb";
-    thumb.textContent = "PROJECT";
-    const info = document.createElement("div");
-    info.className = "project-info";
-    const name = document.createElement("strong");
-    name.textContent = p.name;
-    const small = document.createElement("small");
-    small.textContent = `${p.ratio} ・ ${p.resolution}p ・ ${new Date(p.updatedAt).toLocaleString("ja-JP")}`;
-    info.append(name, small);
-    const open = () => openProject(p.id);
-    thumb.addEventListener("click", open);
-    info.addEventListener("click", open);
-    const menu = document.createElement("button");
-    menu.className = "project-menu";
-    menu.textContent = "•••";
-    menu.addEventListener("click", () => {
-      const action = prompt("rename（名前変更） / duplicate（複製） / delete（削除）");
-      if (action === "rename") {
-        const n = prompt("新しい名前", p.name);
-        if (n && n.trim()) p.name = n.trim();
-      } else if (action === "duplicate") {
-        projects.push({...p, id: id(), name: p.name + " のコピー", updatedAt: Date.now()});
-      } else if (action === "delete" && confirm("削除しますか？")) {
-        projects = projects.filter(x => x.id !== p.id);
-      }
-      saveProjects();
-    });
-    card.append(thumb, info, menu);
-    list.appendChild(card);
-  });
-}
-$("newProjectBtn").addEventListener("click", () => showScreen("createScreen"));
-document.querySelectorAll("[data-back]").forEach(b => b.addEventListener("click", () => showScreen("projectsScreen")));
-document.querySelectorAll(".ratio").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll(".ratio").forEach(x => x.classList.remove("selected"));
-  b.classList.add("selected");
-  selectedRatio = b.dataset.ratio;
-}));
-$("createProjectBtn").addEventListener("click", () => {
-  const p = {id:id(), name:$("projectName").value.trim() || "新しいプロジェクト",
-    ratio:selectedRatio, resolution:$("resolution").value, updatedAt:Date.now()};
-  projects.push(p); saveProjects(); openProject(p.id);
-});
-function openProject(projectId) {
-  currentProject = projects.find(p => p.id === projectId);
-  if (!currentProject) return;
-  media = []; clips = []; trackCount = 1; selectedClipId = null;
-  $("editorProjectName").textContent = currentProject.name;
-  $("projectMeta").textContent = `${currentProject.ratio} ・ ${currentProject.resolution}p`;
-  $("previewCanvas").style.aspectRatio = currentProject.ratio.replace(":", " / ");
-  $("previewCanvas").innerHTML = "<span>プレビュー</span>";
-  renderMedia(); renderTracks(); showScreen("editorScreen");
-}
-$("editorBack").addEventListener("click", () => showScreen("projectsScreen"));
-$("saveBtn").addEventListener("click", () => {
-  if (!currentProject) return;
-  currentProject.updatedAt = Date.now();
-  saveProjects();
-  alert("プロジェクト情報を保存しました。素材ファイル本体の保存は次の段階で追加します。");
-});
-$("projectSearch").addEventListener("input", renderProjects);
-
-function addFiles(files, type) {
-  Array.from(files).forEach(file => {
-    media.push({id:id(), name:file.name, type, file, url:URL.createObjectURL(file)});
-  });
-  renderMedia();
-}
-function renderMedia() {
-  const list = $("mediaItems");
-  if (!list) return;
-  list.innerHTML = "";
-  if (!media.length) {
-    const p = document.createElement("p");
-    p.textContent = "まだ素材がありません。動画・写真・音声を追加してください。";
-    list.appendChild(p);
-    return;
-  }
-  media.forEach(item => {
-    const row = document.createElement("div");
-    row.className = "media-item";
-    const label = document.createElement("span");
-    label.textContent = `${item.type === "video" ? "動画" : item.type === "image" ? "写真" : "音声"}：${item.name}`;
-    const button = document.createElement("button");
-    button.textContent = "タイムラインへ";
-    button.addEventListener("click", () => {
-      const clip = {id:id(), mediaId:item.id, name:item.name, type:item.type, track:0};
-      clips.push(clip); selectedClipId = clip.id;
-      renderTracks(); showPreview(item);
-    });
-    row.append(label, button);
-    list.appendChild(row);
-  });
-}
-function renderTracks() {
-  const area = $("tracks");
-  area.innerHTML = "";
-  if (!clips.length) {
-    area.innerHTML = '<div class="empty-timeline">素材から「タイムラインへ」を押すと、ここに配置されます。</div>';
-    return;
-  }
-  for (let i = 0; i < trackCount; i++) {
-    const row = document.createElement("div");
-    row.className = "track";
-    const label = document.createElement("span");
-    label.className = "track-name";
-    label.textContent = `トラック ${i+1}`;
-    row.appendChild(label);
-    clips.filter(c => c.track === i).forEach(c => {
-      const button = document.createElement("button");
-      button.className = "clip" + (c.type === "audio" ? " audio" : c.type === "image" ? " image" : "");
-      button.textContent = c.name;
-      button.style.border = c.id === selectedClipId ? "2px solid #435ee8" : "";
-      button.dataset.clipId = c.id;
-      row.appendChild(button);
-    });
-    area.appendChild(row);
-  }
-}
-let activePlayer = null;
-let imagePreviewTimer = null;
-
-function formatTime(seconds) {
-  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
-  const whole = Math.floor(seconds);
-  const hours = Math.floor(whole / 3600);
-  const minutes = Math.floor((whole % 3600) / 60);
-  const secs = whole % 60;
-  return [hours, minutes, secs].map(v => String(v).padStart(2, "0")).join(":");
-}
-
-function updatePlaybackUI() {
-  const player = activePlayer;
-  const current = player ? player.currentTime || 0 : 0;
-  const duration = player && Number.isFinite(player.duration) ? player.duration : 0;
-  $("currentTime").textContent = formatTime(current);
-  $("totalTime").textContent = formatTime(duration);
-  $("seekBar").max = duration > 0 ? duration : 100;
-  $("seekBar").value = duration > 0 ? current : 0;
-  $("playBtn").textContent = player && !player.paused ? "Ⅱ" : "▶";
-}
-
-function showPreview(item) {
-  const canvas = $("previewCanvas");
-  if (imagePreviewTimer) {
-    clearInterval(imagePreviewTimer);
-    imagePreviewTimer = null;
-  }
-  activePlayer = null;
-  canvas.innerHTML = "";
-  $("currentTime").textContent = "00:00:00";
-  $("totalTime").textContent = "00:00:00";
-  $("seekBar").value = 0;
-  $("seekBar").max = 100;
-  $("playBtn").textContent = "▶";
-
-  let element;
-  if (item.type === "video") {
-    element = document.createElement("video");
-    element.controls = true;
-    element.playsInline = true;
-    element.preload = "metadata";
-    element.addEventListener("loadedmetadata", updatePlaybackUI);
-    element.addEventListener("timeupdate", updatePlaybackUI);
-    element.addEventListener("play", updatePlaybackUI);
-    element.addEventListener("pause", updatePlaybackUI);
-    element.addEventListener("ended", updatePlaybackUI);
-    activePlayer = element;
-  } else if (item.type === "image") {
-    element = document.createElement("img");
-    element.alt = item.name;
-    $("totalTime").textContent = "00:00:05";
-  } else {
-    element = document.createElement("audio");
-    element.controls = true;
-    element.preload = "metadata";
-    element.addEventListener("loadedmetadata", updatePlaybackUI);
-    element.addEventListener("timeupdate", updatePlaybackUI);
-    element.addEventListener("play", updatePlaybackUI);
-    element.addEventListener("pause", updatePlaybackUI);
-    element.addEventListener("ended", updatePlaybackUI);
-    activePlayer = element;
-  }
-  element.src = item.url;
-  element.style.maxWidth = "100%";
-  element.style.maxHeight = "100%";
-  element.style.objectFit = "contain";
-  canvas.appendChild(element);
-  if (activePlayer) {
-    activePlayer.playbackRate = Number($("previewSpeed").value) || 1;
-    updatePlaybackUI();
-  }
-}
-// 素材追加ボタンは、パネルを切り替えても動くように親要素でクリックを受け取ります。
-$("toolContent").addEventListener("click", e => {
-  const button = e.target.closest("button");
-  if (!button) return;
-  if (button.id === "addVideoBtn") $("videoInput").click();
-  if (button.id === "addPhotoBtn") $("photoInput").click();
-  if (button.id === "addAudioBtn") $("audioInput").click();
-});
-
-// タイムラインのクリップ選択も、描画し直した後に確実に反応するようにします。
-$("tracks").addEventListener("click", e => {
-  const button = e.target.closest("button[data-clip-id]");
-  if (!button) return;
-  selectedClipId = button.dataset.clipId;
-  const clip = clips.find(c => c.id === selectedClipId);
-  const item = clip && media.find(m => m.id === clip.mediaId);
-  if (item) showPreview(item);
-  renderTracks();
-});
-$("videoInput").addEventListener("change", e => { addFiles(e.target.files, "video"); e.target.value = ""; });
-$("photoInput").addEventListener("change", e => { addFiles(e.target.files, "image"); e.target.value = ""; });
-$("audioInput").addEventListener("change", e => { addFiles(e.target.files, "audio"); e.target.value = ""; });
-$("addTrackBtn").addEventListener("click", () => { trackCount++; renderTracks(); });
-$("zoomInBtn").addEventListener("click", () => alert("タイムライン拡大は次の段階で実装します。"));
-$("zoomOutBtn").addEventListener("click", () => alert("タイムライン縮小は次の段階で実装します。"));
-$("fitPreviewBtn").addEventListener("click", () => {
-  $("previewCanvas").style.width = "";
-  $("previewCanvas").style.height = "";
-});
-$("playBtn").addEventListener("click", () => {
-  if (!activePlayer) return alert("先に動画または音声をプレビューに読み込んでください。");
-  if (activePlayer.paused) {
-    activePlayer.play().catch(() => alert("再生できませんでした。もう一度タップしてください。"));
-  } else {
-    activePlayer.pause();
-  }
-});
-
-$("seekBar").addEventListener("input", () => {
-  if (!activePlayer || !Number.isFinite(activePlayer.duration)) return;
-  activePlayer.currentTime = Number($("seekBar").value);
-  updatePlaybackUI();
-});
-
-$("previewSpeed").addEventListener("change", () => {
-  if (activePlayer) activePlayer.playbackRate = Number($("previewSpeed").value) || 1;
-});
-
-const toolInfo = {
-  media:["メディア","動画・写真・音声を追加し、タイムラインへ配置できます。"],
-  edit:["編集","カット・分割・速度変更などを追加予定です。"],
-  text:["テキスト","字幕・タイトル・文字アニメーションを追加予定です。"],
-  audio:["オーディオ","BGM・効果音・波形編集を追加予定です。"],
-  effects:["エフェクト","映像効果・カラー調整を追加予定です。"],
-  layers:["レイヤー","トラックやレイヤー管理を追加予定です。"],
-  settings:["設定","書き出し・保存・ガイド設定を追加予定です."]
-};
-document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
-  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  tab.classList.add("active");
-  const [title, description] = toolInfo[tab.dataset.tab];
-  $("toolTitle").textContent = title;
-  $("toolContent").innerHTML = "";
-  const p = document.createElement("p"); p.textContent = description;
-  $("toolContent").appendChild(p);
-  if (tab.dataset.tab === "media") {
-    const buttons = document.createElement("div");
-    buttons.className = "media-buttons";
-    buttons.innerHTML = '<button id="addVideoBtn">動画を追加</button><button id="addPhotoBtn">写真を追加</button><button id="addAudioBtn">音声を追加</button>';
-    const items = document.createElement("div"); items.id = "mediaItems"; items.className = "media-items";
-    $("toolContent").append(buttons, items);
-    renderMedia();
-  }
-  $("toolPanel").classList.remove("hidden");
-}));
-$("closeToolPanel").addEventListener("click", () => $("toolPanel").classList.add("hidden"));
+let playhead = 0, zoom = 42, playing = false, raf = 0, lastFrame = 0;
+let activePlayer = null, activeMediaId = null, previewingClipId = null;
+const IMAGE_DEFAULT_DURATION = 5;
+const PX_PER_SECOND = () => zoom;
+function id(){return crypto.randomUUID ? crypto.randomUUID() : "id-"+Date.now()+Math.random();}
+function showScreen(name){screens.forEach(x=>$(x).classList.toggle("hidden",x!==name));}
+function saveProjects(){try{localStorage.setItem("pve_projects",JSON.stringify(projects));renderProjects();}catch{alert("保存できませんでした。");}}
+function loadProjects(){try{projects=JSON.parse(localStorage.getItem("pve_projects")||"[]");}catch{projects=[];}renderProjects();}
+function renderProjects(){const list=$("projectList");if(!list)return;list.innerHTML="";const q=($("projectSearch").value||"").toLowerCase();const found=projects.filter(p=>p.name.toLowerCase().includes(q));if(!found.length){list.innerHTML='<div class="empty-timeline">プロジェクトはまだありません。「新規作成」から始めましょう。</div>';return;}found.forEach(p=>{const card=document.createElement("article");card.className="project-card";const thumb=document.createElement("div");thumb.className="project-thumb";thumb.textContent="PROJECT";const info=document.createElement("div");info.className="project-info";const name=document.createElement("strong");name.textContent=p.name;const small=document.createElement("small");small.textContent=`${p.ratio} ・ ${p.resolution}p ・ ${new Date(p.updatedAt).toLocaleString("ja-JP")}`;info.append(name,small);const open=()=>openProject(p.id);thumb.addEventListener("click",open);info.addEventListener("click",open);const menu=document.createElement("button");menu.className="project-menu";menu.textContent="•••";menu.addEventListener("click",()=>{const a=prompt("rename（名前変更） / duplicate（複製） / delete（削除）");if(a==="rename"){const n=prompt("新しい名前",p.name);if(n&&n.trim())p.name=n.trim();}else if(a==="duplicate")projects.push({...p,id:id(),name:p.name+" のコピー",updatedAt:Date.now()});else if(a==="delete"&&confirm("削除しますか？"))projects=projects.filter(x=>x.id!==p.id);saveProjects();});card.append(thumb,info,menu);list.appendChild(card);});}
+$("newProjectBtn").addEventListener("click",()=>showScreen("createScreen"));
+document.querySelectorAll("[data-back]").forEach(b=>b.addEventListener("click",()=>showScreen("projectsScreen")));
+document.querySelectorAll(".ratio").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".ratio").forEach(x=>x.classList.remove("selected"));b.classList.add("selected");selectedRatio=b.dataset.ratio;}));
+$("createProjectBtn").addEventListener("click",()=>{const p={id:id(),name:$("projectName").value.trim()||"新しいプロジェクト",ratio:selectedRatio,resolution:$("resolution").value,updatedAt:Date.now()};projects.push(p);saveProjects();openProject(p.id);});
+function openProject(projectId){stopPlayback();currentProject=projects.find(p=>p.id===projectId);if(!currentProject)return;media=[];clips=[];trackCount=2;selectedClipId=null;playhead=0;$("editorProjectName").textContent=currentProject.name;$("projectMeta").textContent=`${currentProject.ratio} ・ ${currentProject.resolution}p`;$ ("previewCanvas").style.aspectRatio=currentProject.ratio.replace(":"," / ");$("previewCanvas").innerHTML="<span>プレビュー</span>";renderMedia();renderTracks();updatePlaybackUI();showScreen("editorScreen");}
+$("editorBack").addEventListener("click",()=>{stopPlayback();showScreen("projectsScreen");});
+$("saveBtn").addEventListener("click",()=>{if(!currentProject)return;currentProject.updatedAt=Date.now();saveProjects();alert("プロジェクト情報を保存しました。現在、素材本体はブラウザを閉じると再読み込みが必要です。");});
+$("projectSearch").addEventListener("input",renderProjects);
+function addFiles(files,type){Array.from(files).forEach(file=>{const item={id:id(),name:file.name,type,file,url:URL.createObjectURL(file),duration:type==="image"?IMAGE_DEFAULT_DURATION:0};media.push(item);if(type!=="image"){const probe=document.createElement(type==="video"?"video":"audio");probe.preload="metadata";probe.src=item.url;probe.addEventListener("loadedmetadata",()=>{item.duration=Number.isFinite(probe.duration)?probe.duration:IMAGE_DEFAULT_DURATION;});}});renderMedia();}
+function renderMedia(){const list=$("mediaItems");if(!list)return;list.innerHTML="";if(!media.length){const p=document.createElement("p");p.textContent="まだ素材がありません。動画・写真・音声を追加してください。";list.appendChild(p);return;}media.forEach(item=>{const row=document.createElement("div");row.className="media-item";const label=document.createElement("span");label.textContent=`${item.type==="video"?"動画":item.type==="image"?"写真":"音声"}：${item.name}`;const button=document.createElement("button");button.textContent="タイムラインへ";button.addEventListener("click",()=>{const c={id:id(),mediaId:item.id,name:item.name,type:item.type,track:0,start:nextStart(0),duration:item.duration||IMAGE_DEFAULT_DURATION};clips.push(c);selectedClipId=c.id;renderTracks();seekTo(playhead);});row.append(label,button);list.appendChild(row);});}
+function nextStart(track){const same=clips.filter(c=>c.track===track);return same.length?Math.max(...same.map(c=>c.start+c.duration)):0;}
+function projectDuration(){return Math.max(20,...clips.map(c=>c.start+c.duration),playhead+1);}
+function renderTracks(){const area=$("tracks");area.innerHTML="";area.classList.add("timeline-lanes");const totalWidth=Math.max(900,projectDuration()*PX_PER_SECOND());area.style.setProperty("--timeline-width",totalWidth+"px");area.style.setProperty("--timeline-scale",PX_PER_SECOND()+"px");for(let i=0;i<trackCount;i++){const row=document.createElement("div");row.className="track";row.dataset.track=String(i);const label=document.createElement("span");label.className="track-name";label.textContent=`トラック ${i+1}`;row.appendChild(label);const lane=document.createElement("div");lane.className="track-lane";lane.dataset.track=String(i);lane.style.width=totalWidth+"px";clips.filter(c=>c.track===i).forEach(c=>{const b=document.createElement("button");b.className="clip"+(c.type==="audio"?" audio":c.type==="image"?" image":"")+(c.id===selectedClipId?" selected":"");b.textContent=c.name;b.dataset.clipId=c.id;b.style.left=(c.start*PX_PER_SECOND())+"px";b.style.width=Math.max(54,c.duration*PX_PER_SECOND())+"px";lane.appendChild(b);});row.appendChild(lane);area.appendChild(row);}const head=document.createElement("div");head.className="timeline-playhead";head.style.left=(66+playhead*PX_PER_SECOND())+"px";area.appendChild(head);}
+function formatTime(s){if(!Number.isFinite(s)||s<0)s=0;const w=Math.floor(s);return [Math.floor(w/3600),Math.floor(w%3600/60),w%60].map(v=>String(v).padStart(2,"0")).join(":");}
+function updatePlaybackUI(){const duration=projectDuration();$("currentTime").textContent=formatTime(playhead);$("totalTime").textContent=formatTime(duration);$("seekBar").max=duration;$("seekBar").value=playhead;$("playBtn").textContent=playing?"Ⅱ":"▶";}
+function findClipAt(t){return clips.filter(c=>t>=c.start&&t<c.start+c.duration&&c.type!=="audio").sort((a,b)=>b.track-a.track)[0]||null;}
+function showClip(c,localTime=0){const item=media.find(m=>m.id===c.mediaId);if(!item)return;const canvas=$("previewCanvas");if(previewingClipId===c.id&&activePlayer&&item.type==="video"){if(Math.abs(activePlayer.currentTime-localTime)>.35)activePlayer.currentTime=Math.min(localTime,Math.max(0,(item.duration||1)-.05));return;}previewingClipId=c.id;activeMediaId=item.id;if(activePlayer){activePlayer.pause();activePlayer=null;}canvas.innerHTML="";let el;if(item.type==="image"){el=document.createElement("img");el.alt=item.name;}else if(item.type==="video"){el=document.createElement("video");el.playsInline=true;el.preload="auto";el.muted=false;activePlayer=el;el.addEventListener("loadedmetadata",()=>{el.currentTime=Math.min(localTime,Math.max(0,el.duration-.05));if(playing)el.play().catch(()=>{});});}else{return;}el.src=item.url;el.style.maxWidth="100%";el.style.maxHeight="100%";el.style.width="100%";el.style.height="100%";el.style.objectFit="contain";canvas.appendChild(el);if(item.type==="video"&&el.readyState>=1){el.currentTime=Math.min(localTime,Math.max(0,el.duration-.05));if(playing)el.play().catch(()=>{});}}
+function seekTo(t){playhead=Math.max(0,Math.min(Number(t)||0,projectDuration()));const c=findClipAt(playhead);if(c)showClip(c,playhead-c.start);else{if(activePlayer){activePlayer.pause();activePlayer=null;}previewingClipId=null;$("previewCanvas").innerHTML="<span>この位置に映像クリップはありません</span>";}updatePlaybackUI();updatePlayhead();}
+function updatePlayhead(){const h=$("tracks").querySelector(".timeline-playhead");if(h)h.style.left=(66+playhead*PX_PER_SECOND())+"px";}
+function stopPlayback(){playing=false;if(raf)cancelAnimationFrame(raf);raf=0;if(activePlayer)activePlayer.pause();updatePlaybackUI();}
+function frame(now){if(!playing)return;if(!lastFrame)lastFrame=now;const dt=(now-lastFrame)/1000;lastFrame=now;seekTo(playhead+dt*(Number($("previewSpeed").value)||1));if(playhead>=projectDuration()){stopPlayback();return;}raf=requestAnimationFrame(frame);}
+function startPlayback(){if(playing)return;playing=true;lastFrame=0;const c=findClipAt(playhead);if(c)showClip(c,playhead-c.start);if(activePlayer)activePlayer.play().catch(()=>{});updatePlaybackUI();raf=requestAnimationFrame(frame);}
+$("tracks").addEventListener("click",e=>{const b=e.target.closest("button[data-clip-id]");if(b){selectedClipId=b.dataset.clipId;const c=clips.find(x=>x.id===selectedClipId);seekTo(c.start);renderTracks();}});
+let drag=null;
+$("tracks").addEventListener("pointerdown",e=>{const b=e.target.closest("button[data-clip-id]");if(!b)return;const c=clips.find(x=>x.id===b.dataset.clipId);if(!c)return;drag={id:c.id,startX:e.clientX,startY:e.clientY,originalStart:c.start,originalTrack:c.track,moved:false};$("tracks").setPointerCapture?.(e.pointerId);e.preventDefault();});
+$("tracks").addEventListener("pointermove",e=>{if(!drag)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)+Math.abs(dy)<5)return;drag.moved=true;const c=clips.find(x=>x.id===drag.id);if(!c)return;c.start=Math.max(0,drag.originalStart+dx/PX_PER_SECOND());const rows=Array.from($("tracks").querySelectorAll(".track"));const hit=document.elementFromPoint(e.clientX,e.clientY)?.closest(".track");if(hit){const idx=rows.indexOf(hit);if(idx>=0){while(idx>=trackCount){trackCount++;}c.track=idx;}}renderTracks();});
+$("tracks").addEventListener("pointerup",()=>{if(drag){if(drag.moved){selectedClipId=drag.id;renderTracks();seekTo(clips.find(c=>c.id===drag.id).start);}drag=null;}});
+$("tracks").addEventListener("pointercancel",()=>{drag=null;});
+$("tracks").addEventListener("click",e=>{if(e.target.closest(".track-lane")&&!e.target.closest(".clip")){const lane=e.target.closest(".track-lane");const rect=lane.getBoundingClientRect();seekTo(Math.max(0,(e.clientX-rect.left+$("tracks").scrollLeft)/PX_PER_SECOND()));}});
+$("videoInput").addEventListener("change",e=>{addFiles(e.target.files,"video");e.target.value="";});$("photoInput").addEventListener("change",e=>{addFiles(e.target.files,"image");e.target.value="";});$("audioInput").addEventListener("change",e=>{addFiles(e.target.files,"audio");e.target.value="";});
+$("toolContent").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;if(b.id==="addVideoBtn")$("videoInput").click();if(b.id==="addPhotoBtn")$("photoInput").click();if(b.id==="addAudioBtn")$("audioInput").click();});
+$("addTrackBtn").addEventListener("click",()=>{trackCount++;renderTracks();});$("zoomInBtn").addEventListener("click",()=>{zoom=Math.min(120,zoom+10);renderTracks();});$("zoomOutBtn").addEventListener("click",()=>{zoom=Math.max(15,zoom-8);renderTracks();});
+$("playBtn").addEventListener("click",()=>playing?stopPlayback():startPlayback());$("seekBar").addEventListener("input",()=>seekTo(Number($("seekBar").value)));$("previewSpeed").addEventListener("change",()=>{if(activePlayer)activePlayer.playbackRate=Number($("previewSpeed").value)||1;});
+$("fitPreviewBtn").addEventListener("click",()=>{$("previewCanvas").style.width="";$("previewCanvas").style.height="";});
+const toolInfo={media:["メディア","動画・写真・音声を追加し、タイムラインへ配置できます。"],edit:["編集","カット・分割・速度変更などを追加予定です。"],text:["テキスト","字幕・タイトル・文字アニメーションを追加予定です。"],audio:["オーディオ","BGM・効果音・波形編集を追加予定です。"],effects:["エフェクト","映像効果・カラー調整を追加予定です。"],layers:["レイヤー","トラックやレイヤー管理を追加予定です。"],settings:["設定","書き出し・保存・ガイド設定を追加予定です。"]};
+document.querySelectorAll(".tab").forEach(tab=>tab.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));tab.classList.add("active");const [title,description]=toolInfo[tab.dataset.tab];$("toolTitle").textContent=title;$("toolContent").innerHTML="";const p=document.createElement("p");p.textContent=description;$("toolContent").appendChild(p);if(tab.dataset.tab==="media"){const buttons=document.createElement("div");buttons.className="media-buttons";buttons.innerHTML='<button id="addVideoBtn">動画を追加</button><button id="addPhotoBtn">写真を追加</button><button id="addAudioBtn">音声を追加</button>';const items=document.createElement("div");items.id="mediaItems";items.className="media-items";$("toolContent").append(buttons,items);renderMedia();}$("toolPanel").classList.remove("hidden");}));
+$("closeToolPanel").addEventListener("click",()=>$("toolPanel").classList.add("hidden"));
 loadProjects();
