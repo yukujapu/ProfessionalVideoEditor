@@ -66,3 +66,17 @@ h1 { font-size: 25px; margin: 2px 0; }
   .preview-stage { min-height:320px; }
   .tool-panel { left:auto; width:360px; }
 }
+
+/* iPhone向けプレビューサイズ調整 */
+@media (max-width: 849px) {
+  .preview-stage {
+    min-height: 140px;
+    padding: 8px;
+  }
+
+  .preview-canvas {
+    height: 120px;
+    width: auto;
+    max-width: 100%;
+  }
+}
