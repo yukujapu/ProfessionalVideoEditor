@@ -156,26 +156,79 @@ function renderTracks() {
     area.appendChild(row);
   }
 }
+let activePlayer = null;
+let imagePreviewTimer = null;
+
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) seconds = 0;
+  const whole = Math.floor(seconds);
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const secs = whole % 60;
+  return [hours, minutes, secs].map(v => String(v).padStart(2, "0")).join(":");
+}
+
+function updatePlaybackUI() {
+  const player = activePlayer;
+  const current = player ? player.currentTime || 0 : 0;
+  const duration = player && Number.isFinite(player.duration) ? player.duration : 0;
+  $("currentTime").textContent = formatTime(current);
+  $("totalTime").textContent = formatTime(duration);
+  $("seekBar").max = duration > 0 ? duration : 100;
+  $("seekBar").value = duration > 0 ? current : 0;
+  $("playBtn").textContent = player && !player.paused ? "Ⅱ" : "▶";
+}
+
 function showPreview(item) {
   const canvas = $("previewCanvas");
+  if (imagePreviewTimer) {
+    clearInterval(imagePreviewTimer);
+    imagePreviewTimer = null;
+  }
+  activePlayer = null;
   canvas.innerHTML = "";
+  $("currentTime").textContent = "00:00:00";
+  $("totalTime").textContent = "00:00:00";
+  $("seekBar").value = 0;
+  $("seekBar").max = 100;
+  $("playBtn").textContent = "▶";
+
   let element;
   if (item.type === "video") {
     element = document.createElement("video");
-    element.controls = true; element.playsInline = true;
+    element.controls = true;
+    element.playsInline = true;
     element.preload = "metadata";
+    element.addEventListener("loadedmetadata", updatePlaybackUI);
+    element.addEventListener("timeupdate", updatePlaybackUI);
+    element.addEventListener("play", updatePlaybackUI);
+    element.addEventListener("pause", updatePlaybackUI);
+    element.addEventListener("ended", updatePlaybackUI);
+    activePlayer = element;
   } else if (item.type === "image") {
     element = document.createElement("img");
     element.alt = item.name;
+    $("totalTime").textContent = "00:00:05";
   } else {
     element = document.createElement("audio");
     element.controls = true;
+    element.preload = "metadata";
+    element.addEventListener("loadedmetadata", updatePlaybackUI);
+    element.addEventListener("timeupdate", updatePlaybackUI);
+    element.addEventListener("play", updatePlaybackUI);
+    element.addEventListener("pause", updatePlaybackUI);
+    element.addEventListener("ended", updatePlaybackUI);
+    activePlayer = element;
   }
   element.src = item.url;
   element.style.maxWidth = "100%";
   element.style.maxHeight = "100%";
   element.style.objectFit = "contain";
   canvas.appendChild(element);
+  if (activePlayer) {
+    activePlayer.playbackRate = Number($("previewSpeed").value) || 1;
+    updatePlaybackUI();
+  }
 }
 // 素材追加ボタンは、パネルを切り替えても動くように親要素でクリックを受け取ります。
 $("toolContent").addEventListener("click", e => {
@@ -207,10 +260,22 @@ $("fitPreviewBtn").addEventListener("click", () => {
   $("previewCanvas").style.height = "";
 });
 $("playBtn").addEventListener("click", () => {
-  const player = $("previewCanvas").querySelector("video, audio");
-  if (!player) return alert("先に動画または音声をプレビューに読み込んでください。");
-  if (player.paused) player.play().catch(() => alert("再生できませんでした。"));
-  else player.pause();
+  if (!activePlayer) return alert("先に動画または音声をプレビューに読み込んでください。");
+  if (activePlayer.paused) {
+    activePlayer.play().catch(() => alert("再生できませんでした。もう一度タップしてください。"));
+  } else {
+    activePlayer.pause();
+  }
+});
+
+$("seekBar").addEventListener("input", () => {
+  if (!activePlayer || !Number.isFinite(activePlayer.duration)) return;
+  activePlayer.currentTime = Number($("seekBar").value);
+  updatePlaybackUI();
+});
+
+$("previewSpeed").addEventListener("change", () => {
+  if (activePlayer) activePlayer.playbackRate = Number($("previewSpeed").value) || 1;
 });
 
 const toolInfo = {
