@@ -150,12 +150,7 @@ function renderTracks() {
       button.className = "clip" + (c.type === "audio" ? " audio" : c.type === "image" ? " image" : "");
       button.textContent = c.name;
       button.style.border = c.id === selectedClipId ? "2px solid #435ee8" : "";
-      button.addEventListener("click", () => {
-        selectedClipId = c.id;
-        const item = media.find(m => m.id === c.mediaId);
-        if (item) showPreview(item);
-        renderTracks();
-      });
+      button.dataset.clipId = c.id;
       row.appendChild(button);
     });
     area.appendChild(row);
@@ -182,9 +177,25 @@ function showPreview(item) {
   element.style.objectFit = "contain";
   canvas.appendChild(element);
 }
-$("addVideoBtn").addEventListener("click", () => $("videoInput").click());
-$("addPhotoBtn").addEventListener("click", () => $("photoInput").click());
-$("addAudioBtn").addEventListener("click", () => $("audioInput").click());
+// 素材追加ボタンは、パネルを切り替えても動くように親要素でクリックを受け取ります。
+$("toolContent").addEventListener("click", e => {
+  const button = e.target.closest("button");
+  if (!button) return;
+  if (button.id === "addVideoBtn") $("videoInput").click();
+  if (button.id === "addPhotoBtn") $("photoInput").click();
+  if (button.id === "addAudioBtn") $("audioInput").click();
+});
+
+// タイムラインのクリップ選択も、描画し直した後に確実に反応するようにします。
+$("tracks").addEventListener("click", e => {
+  const button = e.target.closest("button[data-clip-id]");
+  if (!button) return;
+  selectedClipId = button.dataset.clipId;
+  const clip = clips.find(c => c.id === selectedClipId);
+  const item = clip && media.find(m => m.id === clip.mediaId);
+  if (item) showPreview(item);
+  renderTracks();
+});
 $("videoInput").addEventListener("change", e => { addFiles(e.target.files, "video"); e.target.value = ""; });
 $("photoInput").addEventListener("change", e => { addFiles(e.target.files, "image"); e.target.value = ""; });
 $("audioInput").addEventListener("change", e => { addFiles(e.target.files, "audio"); e.target.value = ""; });
@@ -225,9 +236,6 @@ document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", (
     buttons.innerHTML = '<button id="addVideoBtn">動画を追加</button><button id="addPhotoBtn">写真を追加</button><button id="addAudioBtn">音声を追加</button>';
     const items = document.createElement("div"); items.id = "mediaItems"; items.className = "media-items";
     $("toolContent").append(buttons, items);
-    $("addVideoBtn").addEventListener("click", () => $("videoInput").click());
-    $("addPhotoBtn").addEventListener("click", () => $("photoInput").click());
-    $("addAudioBtn").addEventListener("click", () => $("audioInput").click());
     renderMedia();
   }
   $("toolPanel").classList.remove("hidden");
