@@ -80,3 +80,23 @@ h1 { font-size: 25px; margin: 2px 0; }
     max-width: 100%;
   }
 }
+
+/* iPhone用プレビューサイズ修正 */
+@media (max-width: 849px) {
+  #previewCanvas {
+    width: auto !important;
+    height: 160px !important;
+    max-width: 100% !important;
+    max-height: 160px !important;
+    flex-shrink: 0;
+  }
+
+  .preview-stage {
+    min-height: 180px !important;
+    padding: 10px !important;
+  }
+
+  .preview-panel {
+    padding: 10px !important;
+  }
+}
